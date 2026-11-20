@@ -13,10 +13,18 @@
         <div class="absolute -right-16 -top-16 w-72 h-72 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
         <div class="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
             <div class="space-y-3">
-                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-semibold tracking-wider uppercase">
-                    <span>👑 UNESCO World Heritage Site</span>
-                    <span>•</span>
-                    <span>7 Wonders of the Ancient World</span>
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-semibold tracking-wider uppercase">
+                        <span>👑 UNESCO World Heritage Site</span>
+                        <span>•</span>
+                        <span>7 Wonders of the Ancient World</span>
+                    </div>
+
+                    <!-- Supabase Connection Status Badge -->
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full @(TravelService.IsSupabaseConnected ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300" : "bg-slate-800/80 border-slate-700 text-slate-300") border text-xs font-medium">
+                        <span class="w-2 h-2 rounded-full @(TravelService.IsSupabaseConnected ? "bg-emerald-400 animate-pulse" : "bg-amber-400")"></span>
+                        <span>@(TravelService.IsSupabaseConnected ? "Supabase Cloud Database Connected" : "Local Storage Mode • Supabase Ready")</span>
+                    </div>
                 </div>
                 <h1 class="font-serif text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight">
                     Explore with <span class="bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 bg-clip-text text-transparent">PyramidX</span>
@@ -511,9 +519,10 @@
     private int _bookingTickets = 2;
     private string? _notificationMessage;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         TravelService.OnChange += StateHasChanged;
+        await TravelService.EnsureInitializedAsync();
     }
 
     public void Dispose()
@@ -560,9 +569,9 @@
         if (_bookingTickets > 1) _bookingTickets--;
     }
 
-    private void ConfirmBooking()
+    private async Task ConfirmBooking()
     {
-        var booking = TravelService.CreateBooking(_selectedPyramidId, _bookingDate, _bookingTickets);
+        var booking = await TravelService.CreateBookingAsync(_selectedPyramidId, _bookingDate, _bookingTickets);
         if (booking != null)
         {
             _notificationMessage = $"Success! Your tour for {booking.PyramidName} on {booking.TourDate:MMM dd, yyyy} ({booking.NumberOfTickets} tickets) has been confirmed under #{booking.Id}.";
@@ -570,17 +579,17 @@
         }
     }
 
-    private void CancelBooking(int bookingId)
+    private async Task CancelBooking(int bookingId)
     {
-        if (TravelService.CancelBooking(bookingId))
+        if (await TravelService.CancelBookingAsync(bookingId))
         {
             _notificationMessage = $"Booking #{bookingId} was successfully marked as Cancelled.";
         }
     }
 
-    private void DeleteBooking(int bookingId)
+    private async Task DeleteBooking(int bookingId)
     {
-        if (TravelService.DeleteBooking(bookingId))
+        if (await TravelService.DeleteBookingAsync(bookingId))
         {
             _notificationMessage = $"Booking #{bookingId} has been removed from active records.";
         }

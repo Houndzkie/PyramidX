@@ -178,7 +178,8 @@
 
         await Task.Delay(300); // Smooth UI feedback
 
-        if (TravelService.Login(_loginModel.UsernameOrEmail, _loginModel.Password, out var error))
+        var (success, error) = await TravelService.LoginAsync(_loginModel.UsernameOrEmail, _loginModel.Password);
+        if (success)
         {
             _successMessage = "Authentication successful! Redirecting to dashboard...";
             await Task.Delay(400);

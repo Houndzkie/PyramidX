@@ -260,9 +260,10 @@
             Preferences = new List<string>(_selectedInterests)
         };
 
-        if (TravelService.Register(newUser, out var error))
+        var (success, error) = await TravelService.RegisterAsync(newUser);
+        if (success)
         {
-            _successMessage = "Account created successfully! Welcome to the PyramidX Portal.";
+            _successMessage = "Account created successfully! Welcome to the Pyramids of Egypt Portal.";
             await Task.Delay(800);
             Navigation.NavigateTo("dashboard");
         }

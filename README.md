@@ -117,6 +117,36 @@ PyramidX/
 
 ---
 
+## 🗄️ Connecting to Supabase Cloud Database
+
+The application natively supports **Supabase PostgreSQL Database** through the official `Supabase` C# client with real-time cloud data persistence:
+
+### 1. Create a Project on Supabase
+- Sign up or log in at [supabase.com](https://supabase.com/).
+- Click **New project**, choose a name (e.g. `PyramidX` or `AppDev-Midterms`), select a region, and create your database.
+
+### 2. Run the Database Setup Script
+- In your Supabase project dashboard, navigate to the **SQL Editor** (icon in the left navigation sidebar).
+- Click **New Query**.
+- Open the [`supabase_setup.sql`](supabase_setup.sql) file from this repository, copy its entire contents, paste it into the SQL Editor, and click **Run**.
+- This automatically creates the `pyramids`, `users`, and `tour_bookings` tables, enables Row Level Security (RLS) with open anon policies, and seeds all initial historical records and demo data!
+
+### 3. Configure Your Connection Keys
+- In Supabase, go to **Project Settings** (gear icon at the bottom of the left sidebar) -> **API**.
+- Copy:
+  - **Project URL** (e.g., `https://abcdefghijkl.supabase.co`)
+  - **Project API Keys** -> `anon` / `public`
+- Open [`appsettings.json`](appsettings.json) and paste your credentials:
+  ```json
+  "Supabase": {
+    "Url": "https://abcdefghijkl.supabase.co",
+    "Key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }
+  ```
+- Run the app with `dotnet run`! The dashboard header will display **"🟢 Supabase Cloud Database Connected"**, and all registrations, pyramid metrics, and tour bookings will be live-synced in your cloud database!
+
+---
+
 ## 🔑 Default Demo Account
 
 For quick exploration, the application is pre-seeded with an active explorer session:
