@@ -1,5 +1,5 @@
 -- ====================================================================
--- SUPABASE DATABASE SETUP FOR PYRAMIDS OF EGYPT TOURISM PORTAL
+-- SUPABASE DATABASE SETUP FOR PYRAMIDS OF EGYPT (PYRAMIDX)
 -- ====================================================================
 -- Instructions:
 -- 1. Open your Supabase Dashboard: https://supabase.com/dashboard
@@ -7,7 +7,10 @@
 -- 3. Click "New Query", paste this entire script, and click "Run"
 -- ====================================================================
 
--- 1. Create Pyramids Table
+-- 1. Grant Schema Permissions to anon and authenticated roles
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+
+-- 2. Create Pyramids Table
 CREATE TABLE IF NOT EXISTS public.pyramids (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
@@ -21,7 +24,7 @@ CREATE TABLE IF NOT EXISTS public.pyramids (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. Create Users Table
+-- 3. Create Users Table
 CREATE TABLE IF NOT EXISTS public.users (
     id SERIAL PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
@@ -31,7 +34,7 @@ CREATE TABLE IF NOT EXISTS public.users (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. Create Tour Bookings Table
+-- 4. Create Tour Bookings Table
 CREATE TABLE IF NOT EXISTS public.tour_bookings (
     id SERIAL PRIMARY KEY,
     pyramid_id INT REFERENCES public.pyramids(id) ON DELETE SET NULL,
@@ -43,22 +46,21 @@ CREATE TABLE IF NOT EXISTS public.tour_bookings (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. Enable Row Level Security (RLS) & Add Public Policies for Anon Access
-ALTER TABLE public.pyramids ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.tour_bookings ENABLE ROW LEVEL SECURITY;
+-- 5. Grant Full Table & Sequence Permissions to anon and authenticated
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated;
 
--- Allow anonymous read & write for this educational tourism portal demo
-DROP POLICY IF EXISTS "Public All Pyramids" ON public.pyramids;
-CREATE POLICY "Public All Pyramids" ON public.pyramids FOR ALL USING (true) WITH CHECK (true);
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated;
 
-DROP POLICY IF EXISTS "Public All Users" ON public.users;
-CREATE POLICY "Public All Users" ON public.users FOR ALL USING (true) WITH CHECK (true);
+-- 6. Disable Row Level Security (RLS) for demo/educational purposes
+-- This allows the anon key to read, register users, and book tours without policy blocks
+ALTER TABLE public.pyramids DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tour_bookings DISABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Public All Bookings" ON public.tour_bookings;
-CREATE POLICY "Public All Bookings" ON public.tour_bookings FOR ALL USING (true) WITH CHECK (true);
-
--- 5. Seed Initial Promoted Pyramids
+-- 7. Seed Initial Promoted Pyramids
 INSERT INTO public.pyramids (id, name, location, height, built_era, description, entry_fee_usd, image_url, rating)
 VALUES 
 (1, 'Great Pyramid of Giza', 'Giza Plateau, Greater Cairo', 146.6, 'Old Kingdom, 4th Dynasty (~2560 BC)', 
@@ -82,15 +84,20 @@ ON CONFLICT (id) DO UPDATE SET
   image_url = EXCLUDED.image_url,
   rating = EXCLUDED.rating;
 
--- 6. Seed Demo User
+-- 8. Seed Demo User
 INSERT INTO public.users (id, username, email, password, preferences)
 VALUES 
 (1, 'RamsesExplorer', 'ramses@pyramids.eg', 'Password123!', ARRAY['Archaeology', 'Sunset Tours', 'VIP Tomb Access', 'Photography'])
 ON CONFLICT (id) DO NOTHING;
 
--- 7. Seed Initial Tour Bookings
+-- 9. Seed Initial Tour Bookings
 INSERT INTO public.tour_bookings (id, pyramid_id, pyramid_name, tour_date, number_of_tickets, total_price, status)
 VALUES 
 (101, 1, 'Great Pyramid of Giza', CURRENT_DATE + INTERVAL '2 days', 2, 50.00, 'Confirmed'),
 (102, 3, 'Step Pyramid of Djoser', CURRENT_DATE + INTERVAL '5 days', 3, 54.00, 'Confirmed')
 ON CONFLICT (id) DO NOTHING;
+
+-- 10. Update serial sequence counters to prevent ID collisions on new inserts
+SELECT setval(pg_get_serial_sequence('public.pyramids', 'id'), COALESCE(MAX(id), 1)) FROM public.pyramids;
+SELECT setval(pg_get_serial_sequence('public.users', 'id'), COALESCE(MAX(id), 1)) FROM public.users;
+SELECT setval(pg_get_serial_sequence('public.tour_bookings', 'id'), COALESCE(MAX(id), 1)) FROM public.tour_bookings;

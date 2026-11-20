@@ -26,9 +26,13 @@ public class TravelDataService
 
     public bool IsAuthenticated => CurrentUser != null;
     public bool IsSupabaseConnected { get; private set; } = false;
+    public string? ConnectionError { get; private set; }
+
     public string ConnectionStatusText => IsSupabaseConnected 
         ? "Connected to Supabase Cloud Database" 
-        : "Local Demo Mode (Configure Supabase in appsettings.json to sync)";
+        : (!string.IsNullOrEmpty(ConnectionError) 
+            ? $"Supabase Error: {ConnectionError}" 
+            : "Local Demo Mode (Configure Supabase in appsettings.json to sync)");
 
     private int _nextBookingId = 103;
     private int _nextUserId = 2;
@@ -149,62 +153,46 @@ public class TravelDataService
                 _supabaseClient = new Supabase.Client(url, key, options);
                 await _supabaseClient.InitializeAsync();
 
-                // Fetch real Pyramids from Supabase
-                try
+                // Test connection by fetching pyramids
+                var pyramidsRes = await _supabaseClient.From<Pyramid>().Get();
+                if (pyramidsRes.Models.Any())
                 {
-                    var pyramidsRes = await _supabaseClient.From<Pyramid>().Get();
-                    if (pyramidsRes.Models.Any())
-                    {
-                        Pyramids = pyramidsRes.Models.OrderBy(p => p.Id).ToList();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Could not fetch pyramids from Supabase. Using default seed.");
+                    Pyramids = pyramidsRes.Models.OrderBy(p => p.Id).ToList();
                 }
 
                 // Fetch real Users from Supabase
-                try
+                var usersRes = await _supabaseClient.From<User>().Get();
+                if (usersRes.Models.Any())
                 {
-                    var usersRes = await _supabaseClient.From<User>().Get();
-                    if (usersRes.Models.Any())
+                    RegisteredUsers = usersRes.Models;
+                    if (CurrentUser != null)
                     {
-                        RegisteredUsers = usersRes.Models;
-                        if (CurrentUser != null)
-                        {
-                            var matched = RegisteredUsers.FirstOrDefault(u => u.Username.Equals(CurrentUser.Username, StringComparison.OrdinalIgnoreCase));
-                            if (matched != null) CurrentUser = matched;
-                        }
+                        var matched = RegisteredUsers.FirstOrDefault(u => u.Username.Equals(CurrentUser.Username, StringComparison.OrdinalIgnoreCase));
+                        if (matched != null) CurrentUser = matched;
                     }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Could not fetch users from Supabase.");
                 }
 
                 // Fetch real Bookings from Supabase
-                try
+                var bookingsRes = await _supabaseClient.From<TourBooking>().Get();
+                if (bookingsRes.Models.Any())
                 {
-                    var bookingsRes = await _supabaseClient.From<TourBooking>().Get();
-                    if (bookingsRes.Models.Any())
-                    {
-                        Bookings = bookingsRes.Models.OrderByDescending(b => b.Id).ToList();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Could not fetch bookings from Supabase.");
+                    Bookings = bookingsRes.Models.OrderByDescending(b => b.Id).ToList();
                 }
 
                 IsSupabaseConnected = true;
+                ConnectionError = null;
                 _logger.LogInformation("Successfully connected to Supabase database.");
                 NotifyStateChanged();
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to connect to Supabase. Running in local fallback mode.");
             IsSupabaseConnected = false;
+            ConnectionError = ex.Message.Contains("permission denied", StringComparison.OrdinalIgnoreCase)
+                ? "Permission denied. Please execute the GRANT permissions script in your Supabase SQL Editor."
+                : ex.Message;
+            _logger.LogError(ex, "Failed to connect to Supabase: {Message}", ConnectionError);
+            NotifyStateChanged();
         }
         finally
         {
@@ -238,14 +226,16 @@ public class TravelDataService
                     NotifyStateChanged();
                     return (true, null);
                 }
+                return (false, "Invalid credentials. Please verify your username/email and password.");
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Supabase login query error, checking local store.");
+                _logger.LogError(ex, "Supabase login query error.");
+                return (false, $"Database error: {ex.Message}");
             }
         }
 
-        // Local store fallback
+        // Local store fallback if not configured
         var localUser = RegisteredUsers.FirstOrDefault(u =>
             (string.Equals(u.Username, usernameOrEmail, StringComparison.OrdinalIgnoreCase) ||
              string.Equals(u.Email, usernameOrEmail, StringComparison.OrdinalIgnoreCase)) &&
@@ -273,13 +263,22 @@ public class TravelDataService
     }
 
     /// <summary>
-    /// Register a new user and sync with Supabase.
+    /// Register a new user and sync directly with Supabase.
     /// </summary>
     public async Task<(bool Success, string? Error)> RegisterAsync(User newUser)
     {
         await EnsureInitializedAsync();
 
-        // Check duplicates locally first
+        var url = _configuration["Supabase:Url"];
+        bool hasConfiguredKeys = !string.IsNullOrWhiteSpace(url) && !url.Contains("YOUR_PROJECT_ID");
+
+        // If Supabase keys are configured but connection failed, alert the user!
+        if (hasConfiguredKeys && !IsSupabaseConnected)
+        {
+            return (false, $"Supabase Database Connection Failed: {ConnectionError ?? "Permission Denied. Please run the SQL setup script in Supabase."}");
+        }
+
+        // Check duplicates
         if (RegisteredUsers.Any(u => string.Equals(u.Username, newUser.Username, StringComparison.OrdinalIgnoreCase)))
         {
             return (false, "This username is already taken. Please choose another one.");
@@ -302,7 +301,8 @@ public class TravelDataService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to insert user into Supabase. Adding to local cache.");
+                _logger.LogError(ex, "Failed to insert user into Supabase: {Message}", ex.Message);
+                return (false, $"Failed to save in Supabase: {ex.Message}. Make sure you ran the GRANT permissions script in the Supabase SQL Editor.");
             }
         }
         else
